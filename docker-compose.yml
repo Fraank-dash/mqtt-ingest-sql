@@ -1,0 +1,22 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: mqtt-ingest-sql-timescaledb
+    environment:
+      POSTGRES_DB: mqtt
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL AND to_regclass('mqtt_ingest.topic_overview') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_topics(text,text,timestamp with time zone,jsonb)') IS NOT NULL\" | grep -q t",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - .:/docker-entrypoint-initdb.d:ro
