@@ -6,6 +6,8 @@ CREATE OR REPLACE FUNCTION mqtt_ingest.ingest_topics(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, mqtt_ingest
 AS $$
 BEGIN
     INSERT INTO mqtt_ingest.topic_overview (

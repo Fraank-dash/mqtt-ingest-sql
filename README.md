@@ -2,7 +2,23 @@
 
 Standalone TimescaleDB/PostgreSQL bootstrap SQL for the `mqtt_ingest` schema used by `mqtt2postgres`.
 
-This fork starts from the parent repository baseline `0.9.2` and publishes its first standalone version as `0.9.2-fork2.0`.
+This fork starts from the parent repository baseline `0.9.2`. The current standalone version is `0.9.2-fork2.1`.
+
+## Scope
+
+This repository focuses on backend SQL helper functionality for MQTT ingest data:
+
+- accepting MQTT payloads through `mqtt_ingest.ingest_message(...)` and `mqtt_ingest.ingest_topics(...)`
+- storing raw messages and topic inventory
+- processing those rows into aggregate and reconciliation tables
+- exposing SQL helpers, jobs, and verification queries for that data-processing surface
+
+Security architecture, server architecture, deployment topology, certificate management,
+and broader PostgreSQL operations are intentionally solved outside this repository.
+Files such as [`60_security_roles.sql`](60_security_roles.sql) and
+[`docker-compose.yml`](docker-compose.yml) are included as standalone runnable examples
+for development, testing, and local verification. Treat them as reference scaffolding,
+not as the authoritative production security or infrastructure model.
 
 ## Included Surface
 
@@ -15,13 +31,31 @@ This fork starts from the parent repository baseline `0.9.2` and publishes its f
 
 ## Quick Start
 
-Start a fresh local TimescaleDB instance and apply the SQL bootstrap:
+Apply the SQL bootstrap to an existing TimescaleDB/PostgreSQL server:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/mqtt ./scripts/apply-sql.sh
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/mqtt ./scripts/verify-postgres.sh
+```
+
+The scripts also support standard PostgreSQL connection environment variables:
+
+```bash
+PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=mqtt PGUSER=postgres PGPASSWORD=postgres ./scripts/apply-sql.sh
+```
+
+Apply the bootstrap as the PostgreSQL admin or another role allowed to create roles and manage privileges.
+
+For a full no-Docker setup runbook, see [Setup Existing TimescaleDB](docs/setup-existing-timescaledb.md).
+That guide also covers GUI-based SQL application, the standalone verifier SQL file, and password or certificate subscriber-role examples.
+
+For a fresh local TimescaleDB instance, the optional example Compose stack mounts the ordered SQL files into `/docker-entrypoint-initdb.d`:
 
 ```bash
 docker compose up -d
 ```
 
-Verify the bootstrap contract:
+Verify the local Compose bootstrap contract:
 
 ```bash
 ./scripts/verify-bootstrap.sh
@@ -53,13 +87,31 @@ This repository owns the bootstrap contract for:
 - topic inventory table `mqtt_ingest.topic_overview`
 - reconciliation tables `mqtt_ingest.power_energy_*_reconciliation`
 - background-job bootstrap for aggregate and reconciliation refresh
+- least-privilege ingest role `mqtt_ingest_writer`
 
 `mqtt2postgres` is expected to remain compatible with these object names and file ordering.
+
+## MQTT Subscriber Access
+
+The bootstrap creates `mqtt_ingest_writer` as a shared `NOLOGIN` role for MQTT subscriber accounts. It can use schema `mqtt_ingest` and execute only:
+
+- `mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)`
+- `mqtt_ingest.ingest_topics(text,text,timestamp with time zone,jsonb)`
+
+Create real subscriber users separately and grant the group role:
+
+```sql
+CREATE ROLE mqtt_ingest_user1 LOGIN INHERIT PASSWORD 'change-me';
+GRANT mqtt_ingest_writer TO mqtt_ingest_user1;
+```
+
+Subscriber users should write through the ingest functions only; direct table access is intentionally not granted.
 
 ## Provenance
 
 - source repository: `mqtt2postgres`
 - source baseline version: `0.9.2`
 - first fork version: `0.9.2-fork2.0`
+- current standalone version: `0.9.2-fork2.1`
 
 See [FORKNOTE.md](FORKNOTE.md) and [CHANGELOG.md](CHANGELOG.md) for fork provenance and release history.
