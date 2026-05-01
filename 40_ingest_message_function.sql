@@ -21,6 +21,8 @@ DECLARE
     parsed_publisher_id TEXT;
     parsed_sequence BIGINT;
     parsed_published_at TIMESTAMPTZ;
+    parsed_relay_state TEXT;
+    parsed_topic_kind TEXT;
 BEGIN
     BEGIN
         decoded := $2::JSONB;
@@ -49,6 +51,8 @@ BEGIN
         value_text := $2;
     END IF;
 
+    parsed_topic_kind := lower(btrim(COALESCE($4 ->> 'topic_kind', '')));
+
     topic_segments := regexp_split_to_array($1, '/');
     IF array_length(topic_segments, 1) = 3
        AND topic_segments[1] = 'sensors'
@@ -57,6 +61,23 @@ BEGIN
     THEN
         parsed_device_id := topic_segments[2];
         parsed_metric_name := topic_segments[3];
+    ELSIF array_length(topic_segments, 1) = 5
+       AND topic_segments[1] = 'shellies'
+       AND topic_segments[2] <> ''
+       AND topic_segments[3] = 'relay'
+       AND topic_segments[4] = '0'
+       AND topic_segments[5] IN ('power', 'energy')
+    THEN
+        parsed_device_id := topic_segments[2];
+        parsed_metric_name := topic_segments[5];
+    ELSIF array_length(topic_segments, 1) = 4
+       AND topic_segments[1] = 'shellies'
+       AND topic_segments[2] <> ''
+       AND topic_segments[3] = 'relay'
+       AND topic_segments[4] = '0'
+    THEN
+        parsed_device_id := topic_segments[2];
+        parsed_metric_name := 'relay_state';
     ELSE
         parsed_device_id := NULL;
         parsed_metric_name := NULL;
@@ -97,10 +118,40 @@ BEGIN
         $4
     );
 
-    PERFORM mqtt_ingest.refresh_message_3m_aggregates($3, $3, now());
-    PERFORM mqtt_ingest.refresh_message_15m_aggregates($3, $3, now());
-    PERFORM mqtt_ingest.refresh_message_60m_aggregates($3, $3, now());
-    PERFORM mqtt_ingest.refresh_message_24h_aggregates($3, $3, now());
+    IF parsed_metric_name = 'relay_state' THEN
+        parsed_relay_state := lower(btrim(COALESCE(value_text, '')));
+
+        IF parsed_relay_state IN ('on', 'off') THEN
+            INSERT INTO mqtt_ingest.relay_state_events (
+                event_at,
+                topic,
+                device_id,
+                relay_index,
+                state,
+                is_on,
+                payload,
+                metadata
+            )
+            VALUES (
+                $3,
+                $1,
+                parsed_device_id,
+                0,
+                parsed_relay_state,
+                parsed_relay_state = 'on',
+                $2,
+                $4
+            );
+        END IF;
+    END IF;
+
+    IF parsed_topic_kind <> 'status' THEN
+        PERFORM mqtt_ingest.refresh_message_3m_aggregates($3, $3, now());
+        PERFORM mqtt_ingest.refresh_message_15m_aggregates($3, $3, now());
+        PERFORM mqtt_ingest.refresh_message_60m_aggregates($3, $3, now());
+        PERFORM mqtt_ingest.refresh_message_24h_aggregates($3, $3, now());
+    END IF;
+
     PERFORM mqtt_ingest.refresh_power_energy_3m_reconciliation($3, $3, now());
     PERFORM mqtt_ingest.refresh_power_energy_15m_reconciliation($3, $3, now());
     PERFORM mqtt_ingest.refresh_power_energy_60m_reconciliation($3, $3, now());

@@ -26,6 +26,7 @@ flowchart TD
     IngestTopics["mqtt_ingest.ingest_topics(...)"]
 
     Messages["mqtt_ingest.messages\nraw hypertable"]
+    RelayEvents["mqtt_ingest.relay_state_events\nrelay state event hypertable"]
     TopicOverview["mqtt_ingest.topic_overview\ntopic inventory table"]
 
     Refresh3m["refresh_message_3m_aggregates(...)"]
@@ -59,6 +60,7 @@ flowchart TD
     TopicFilters --> IngestTopics
 
     IngestMessage --> Messages
+    IngestMessage --> RelayEvents
     IngestTopics --> TopicOverview
 
     IngestMessage --> Refresh3m
@@ -109,7 +111,7 @@ The sensor subscriber is the data path used for retained raw messages and stored
 
 This means the raw hypertable is the primary source, and the aggregate tables are derived from it.
 
-For `power` and `energy` topics, the raw hypertable is also the source of a separate per-device reconciliation path that compares integrated `power` against cumulative `energy` deltas.
+For `power` and `energy` topics, the raw hypertable is also the source of a separate per-device reconciliation path that compares integrated `power` against cumulative `energy` deltas. For Shelly relay topics, `shellies/<device>/relay/0` payloads of `on` or `off` are also stored in `mqtt_ingest.relay_state_events` so reconciliation rows can report relay on/off coverage for each bucket.
 
 ## Topic Overview Path
 
@@ -129,7 +131,11 @@ For each incoming message, `mqtt_ingest.ingest_message(...)`:
 - extracts `numeric_value` when possible
 - stores trace metadata when present
 - parses `device_id` and `metric_name` for topics that match exactly `sensors/<device>/<metric>`
-- refreshes all four aggregate widths for the touched time range
+- reads `metadata.topic_kind` from newer subscribers to distinguish `measurement` and `status` messages
+- parses Shelly topics `shellies/<device>/relay/0/power`, `shellies/<device>/relay/0/energy`, and `shellies/<device>/relay/0`
+- stores valid Shelly relay `on` and `off` payloads in `mqtt_ingest.relay_state_events`
+- refreshes all four aggregate widths for measurement and legacy messages
+- refreshes only power/energy reconciliation for status messages, because relay coverage changed but generic numeric aggregates do not need a status refresh
 
 Only rows with parsed `device_id` and `metric_name` participate in the device-level aggregate tables.
 
@@ -138,6 +144,7 @@ Only rows with parsed `device_id` and `metric_name` participate in the device-le
 `mqtt_ingest.messages` is the source table for:
 
 - raw message history
+- Shelly relay on/off event history
 - numeric statistics
 - boundary interpolation lookups
 - time-weighted averages
@@ -161,6 +168,17 @@ Each aggregate row is grouped by:
 - `metric_name`
 
 The full `topic` is still retained on the aggregate row for traceability.
+
+Power/energy reconciliation rows also include relay coverage fields:
+
+- `relay_on_seconds`
+- `relay_off_seconds`
+- `relay_on_pct`
+- `relay_off_pct`
+- `relay_event_count`
+- `relay_state_known`
+
+Relay coverage assumes relay 0 is on until the first observed state event, then carries each observed state forward until the next event.
 
 ## Immediate Refresh Vs Background Refresh
 
@@ -187,7 +205,7 @@ When tracing one published sensor message through the system:
 1. confirm it was published to the broker
 2. confirm the sensor subscriber has a matching topic filter
 3. confirm `mqtt_ingest.messages` contains the raw row
-4. confirm parsed `device_id` and `metric_name` if the topic matches `sensors/<device>/<metric>`
+4. confirm parsed `device_id` and `metric_name` if the topic matches `sensors/<device>/<metric>` or the supported Shelly relay topic shapes
 5. inspect the matching aggregate tables for the relevant bucket widths
 6. inspect `status`, `quality_status`, and `quality_score` on the aggregate rows
 

@@ -29,6 +29,12 @@ docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
           ROUND(drift_linear_signed_ws::numeric, 6) AS drift_linear_signed_ws,
           ROUND(drift_linear_abs_ws::numeric, 6) AS drift_linear_abs_ws,
           ROUND(drift_linear_pct::numeric, 6) AS drift_linear_pct,
+          ROUND(relay_on_seconds::numeric, 6) AS relay_on_seconds,
+          ROUND(relay_off_seconds::numeric, 6) AS relay_off_seconds,
+          ROUND(relay_on_pct::numeric, 6) AS relay_on_pct,
+          ROUND(relay_off_pct::numeric, 6) AS relay_off_pct,
+          relay_event_count,
+          relay_state_known,
           status,
           refreshed_at
      FROM mqtt_ingest.power_energy_3m_reconciliation

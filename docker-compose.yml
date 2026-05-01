@@ -12,7 +12,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL AND to_regclass('mqtt_ingest.topic_overview') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_topics(text,text,timestamp with time zone,jsonb)') IS NOT NULL\" | grep -q t",
+          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.relay_state_events') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL AND to_regclass('mqtt_ingest.topic_overview') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_topics(text,text,timestamp with time zone,jsonb)') IS NOT NULL\" | grep -q t",
         ]
       interval: 5s
       timeout: 5s

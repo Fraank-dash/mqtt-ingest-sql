@@ -20,6 +20,8 @@ checks(name, passed) AS (
             to_regclass('mqtt_ingest.messages') IS NOT NULL),
         ('table mqtt_ingest.topic_overview exists',
             to_regclass('mqtt_ingest.topic_overview') IS NOT NULL),
+        ('table mqtt_ingest.relay_state_events exists',
+            to_regclass('mqtt_ingest.relay_state_events') IS NOT NULL),
         ('table mqtt_ingest.message_3m_aggregates exists',
             to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL),
         ('table mqtt_ingest.power_energy_3m_reconciliation exists',

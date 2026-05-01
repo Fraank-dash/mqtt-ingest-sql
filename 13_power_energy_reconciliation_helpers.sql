@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION mqtt_ingest.ensure_power_energy_reconciliation_table(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = pg_catalog, mqtt_ingest, public
 AS $$
 DECLARE
     qualified_table TEXT := format('mqtt_ingest.%I', table_suffix);
@@ -36,6 +37,12 @@ BEGIN
             drift_linear_signed_ws DOUBLE PRECISION,
             drift_linear_abs_ws DOUBLE PRECISION,
             drift_linear_pct DOUBLE PRECISION,
+            relay_on_seconds DOUBLE PRECISION,
+            relay_off_seconds DOUBLE PRECISION,
+            relay_on_pct DOUBLE PRECISION,
+            relay_off_pct DOUBLE PRECISION,
+            relay_event_count BIGINT,
+            relay_state_known BOOLEAN,
             status TEXT NOT NULL,
             refreshed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (bucket_start, device_id),
@@ -58,10 +65,23 @@ BEGIN
     );
 
     EXECUTE format(
+        $sql$
+        ALTER TABLE %s
+            ADD COLUMN IF NOT EXISTS relay_on_seconds DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS relay_off_seconds DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS relay_on_pct DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS relay_off_pct DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS relay_event_count BIGINT,
+            ADD COLUMN IF NOT EXISTS relay_state_known BOOLEAN;
+        $sql$,
+        qualified_table
+    );
+
+    EXECUTE format(
         $comment$COMMENT ON TABLE %s IS %L$comment$,
         qualified_table,
         format(
-            'Per-device power/energy reconciliation buckets for %s windows. Compares energy derived from power integration against cumulative energy counter deltas.',
+            'Per-device power/energy reconciliation buckets for %s windows. Compares energy derived from power integration against cumulative energy counter deltas and reports Shelly relay on/off coverage.',
             bucket_width::TEXT
         )
     );
@@ -77,6 +97,7 @@ CREATE OR REPLACE FUNCTION mqtt_ingest.refresh_power_energy_reconciliation(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = pg_catalog, mqtt_ingest, public
 AS $$
 DECLARE
     refresh_from TIMESTAMPTZ;
@@ -123,6 +144,12 @@ BEGIN
             drift_linear_signed_ws,
             drift_linear_abs_ws,
             drift_linear_pct,
+            relay_on_seconds,
+            relay_off_seconds,
+            relay_on_pct,
+            relay_off_pct,
+            relay_event_count,
+            relay_state_known,
             status,
             refreshed_at
         )
@@ -139,6 +166,8 @@ BEGIN
               AND (
                     topic = format('sensors/%%s/power', device_id)
                  OR topic = format('sensors/%%s/energy', device_id)
+                 OR topic = format('shellies/%%s/relay/0/power', device_id)
+                 OR topic = format('shellies/%%s/relay/0/energy', device_id)
               )
             GROUP BY
                 time_bucket(%L::INTERVAL, received_at),
@@ -160,7 +189,10 @@ BEGIN
             WHERE numeric_value IS NOT NULL
               AND device_id IN (SELECT device_id FROM device_scope)
               AND metric_name = 'power'
-              AND topic = format('sensors/%%s/power', device_id)
+              AND (
+                    topic = format('sensors/%%s/power', device_id)
+                 OR topic = format('shellies/%%s/relay/0/power', device_id)
+              )
             GROUP BY
                 time_bucket(%L::INTERVAL, received_at),
                 device_id
@@ -221,7 +253,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'power'
-                  AND topic = format('sensors/%%s/power', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/power', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/power', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at <= b.bucket_start
                 ORDER BY received_at DESC
@@ -232,7 +267,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'power'
-                  AND topic = format('sensors/%%s/power', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/power', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/power', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at >= b.bucket_start
                 ORDER BY received_at ASC
@@ -243,7 +281,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'power'
-                  AND topic = format('sensors/%%s/power', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/power', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/power', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at <= b.bucket_end
                 ORDER BY received_at DESC
@@ -254,7 +295,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'power'
-                  AND topic = format('sensors/%%s/power', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/power', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/power', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at >= b.bucket_end
                 ORDER BY received_at ASC
@@ -310,7 +354,10 @@ BEGIN
             WHERE numeric_value IS NOT NULL
               AND device_id IN (SELECT device_id FROM device_scope)
               AND metric_name = 'energy'
-              AND topic = format('sensors/%%s/energy', device_id)
+              AND (
+                    topic = format('sensors/%%s/energy', device_id)
+                 OR topic = format('shellies/%%s/relay/0/energy', device_id)
+              )
             GROUP BY
                 time_bucket(%L::INTERVAL, received_at),
                 device_id
@@ -339,7 +386,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'energy'
-                  AND topic = format('sensors/%%s/energy', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/energy', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/energy', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at <= b.bucket_start
                 ORDER BY received_at DESC
@@ -350,7 +400,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'energy'
-                  AND topic = format('sensors/%%s/energy', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/energy', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/energy', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at >= b.bucket_start
                 ORDER BY received_at ASC
@@ -361,7 +414,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'energy'
-                  AND topic = format('sensors/%%s/energy', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/energy', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/energy', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at <= b.bucket_end
                 ORDER BY received_at DESC
@@ -372,7 +428,10 @@ BEGIN
                 FROM mqtt_ingest.messages
                 WHERE device_id = b.device_id
                   AND metric_name = 'energy'
-                  AND topic = format('sensors/%%s/energy', b.device_id)
+                  AND (
+                        topic = format('sensors/%%s/energy', b.device_id)
+                     OR topic = format('shellies/%%s/relay/0/energy', b.device_id)
+                  )
                   AND numeric_value IS NOT NULL
                   AND received_at >= b.bucket_end
                 ORDER BY received_at ASC
@@ -430,6 +489,96 @@ BEGIN
             FROM energy_boundaries
             WHERE energy_numeric_count IS NOT NULL
         ),
+        relay_event_counts AS (
+            SELECT
+                b.bucket_start,
+                b.device_id,
+                COUNT(r.event_at) AS relay_event_count
+            FROM bucket_devices b
+            LEFT JOIN mqtt_ingest.relay_state_events r
+              ON r.device_id = b.device_id
+             AND r.relay_index = 0
+             AND r.event_at >= b.bucket_start
+             AND r.event_at < b.bucket_end
+            GROUP BY
+                b.bucket_start,
+                b.device_id
+        ),
+        relay_segments AS (
+            SELECT
+                segment_rows.bucket_start,
+                segment_rows.bucket_end,
+                segment_rows.device_id,
+                segment_rows.segment_start,
+                LEAD(
+                    segment_rows.segment_start,
+                    1,
+                    segment_rows.bucket_end
+                ) OVER (
+                    PARTITION BY segment_rows.bucket_start, segment_rows.device_id
+                    ORDER BY segment_rows.segment_start, segment_rows.sort_order
+                ) AS segment_end,
+                segment_rows.is_on
+            FROM (
+                SELECT
+                    b.bucket_start,
+                    b.bucket_end,
+                    b.device_id,
+                    s.segment_start,
+                    s.is_on,
+                    s.sort_order
+                FROM bucket_devices b
+                CROSS JOIN LATERAL (
+                    SELECT
+                        b.bucket_start AS segment_start,
+                        COALESCE((
+                            SELECT r.is_on
+                            FROM mqtt_ingest.relay_state_events r
+                            WHERE r.device_id = b.device_id
+                              AND r.relay_index = 0
+                              AND r.event_at <= b.bucket_start
+                            ORDER BY r.event_at DESC
+                            LIMIT 1
+                        ), TRUE) AS is_on,
+                        0 AS sort_order
+                    UNION ALL
+                    SELECT
+                        r.event_at AS segment_start,
+                        r.is_on,
+                        1 AS sort_order
+                    FROM mqtt_ingest.relay_state_events r
+                    WHERE r.device_id = b.device_id
+                      AND r.relay_index = 0
+                      AND r.event_at > b.bucket_start
+                      AND r.event_at < b.bucket_end
+                ) AS s
+            ) AS segment_rows
+        ),
+        relay_coverage AS (
+            SELECT
+                rs.bucket_start,
+                rs.bucket_end,
+                rs.device_id,
+                SUM(
+                    CASE
+                        WHEN rs.is_on
+                        THEN GREATEST(EXTRACT(EPOCH FROM (rs.segment_end - rs.segment_start)), 0)
+                        ELSE 0
+                    END
+                ) AS relay_on_seconds,
+                SUM(
+                    CASE
+                        WHEN NOT rs.is_on
+                        THEN GREATEST(EXTRACT(EPOCH FROM (rs.segment_end - rs.segment_start)), 0)
+                        ELSE 0
+                    END
+                ) AS relay_off_seconds
+            FROM relay_segments rs
+            GROUP BY
+                rs.bucket_start,
+                rs.bucket_end,
+                rs.device_id
+        ),
         final_rows AS (
             SELECT
                 b.bucket_start,
@@ -467,6 +616,12 @@ BEGIN
                     THEN e.energy_linear_value_at_bucket_end - e.energy_linear_value_at_bucket_start
                     ELSE NULL
                 END AS energy_linear_delta_ws,
+                rc.relay_on_seconds,
+                rc.relay_off_seconds,
+                (rc.relay_on_seconds / EXTRACT(EPOCH FROM %L::INTERVAL)) * 100.0 AS relay_on_pct,
+                (rc.relay_off_seconds / EXTRACT(EPOCH FROM %L::INTERVAL)) * 100.0 AS relay_off_pct,
+                COALESCE(rec.relay_event_count, 0) AS relay_event_count,
+                TRUE AS relay_state_known,
                 CASE
                     WHEN b.bucket_end <= date_trunc('minute', $3)
                     THEN 'aggregated'
@@ -480,6 +635,12 @@ BEGIN
             LEFT JOIN energy_rows e
               ON e.bucket_start = b.bucket_start
              AND e.device_id = b.device_id
+            LEFT JOIN relay_coverage rc
+              ON rc.bucket_start = b.bucket_start
+             AND rc.device_id = b.device_id
+            LEFT JOIN relay_event_counts rec
+              ON rec.bucket_start = b.bucket_start
+             AND rec.device_id = b.device_id
         )
         SELECT
             bucket_start,
@@ -537,6 +698,12 @@ BEGIN
                 THEN ((power_linear_integral_ws - energy_linear_delta_ws) / energy_linear_delta_ws) * 100.0
                 ELSE NULL
             END AS drift_linear_pct,
+            relay_on_seconds,
+            relay_off_seconds,
+            relay_on_pct,
+            relay_off_pct,
+            relay_event_count,
+            relay_state_known,
             status,
             refreshed_at
         FROM final_rows
@@ -562,10 +729,18 @@ BEGIN
             drift_linear_signed_ws = EXCLUDED.drift_linear_signed_ws,
             drift_linear_abs_ws = EXCLUDED.drift_linear_abs_ws,
             drift_linear_pct = EXCLUDED.drift_linear_pct,
+            relay_on_seconds = EXCLUDED.relay_on_seconds,
+            relay_off_seconds = EXCLUDED.relay_off_seconds,
+            relay_on_pct = EXCLUDED.relay_on_pct,
+            relay_off_pct = EXCLUDED.relay_off_pct,
+            relay_event_count = EXCLUDED.relay_event_count,
+            relay_state_known = EXCLUDED.relay_state_known,
             status = EXCLUDED.status,
             refreshed_at = EXCLUDED.refreshed_at
         $sql$,
         qualified_table,
+        bucket_width_text,
+        bucket_width_text,
         bucket_width_text,
         bucket_width_text,
         bucket_width_text,

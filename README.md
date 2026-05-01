@@ -2,7 +2,7 @@
 
 Standalone TimescaleDB/PostgreSQL bootstrap SQL for the `mqtt_ingest` schema used by `mqtt2postgres`.
 
-This fork starts from the parent repository baseline `0.9.2`. The current standalone version is `0.9.2-fork2.1`.
+This fork starts from the parent repository baseline `0.9.2`. The current standalone version is `0.9.2-fork2.2`.
 
 ## Scope
 
@@ -83,6 +83,7 @@ This repository owns the bootstrap contract for:
 - schema `mqtt_ingest`
 - functions `mqtt_ingest.ingest_message(...)` and `mqtt_ingest.ingest_topics(...)`
 - raw table `mqtt_ingest.messages`
+- relay state event table `mqtt_ingest.relay_state_events`
 - aggregate tables `mqtt_ingest.message_*_aggregates`
 - topic inventory table `mqtt_ingest.topic_overview`
 - reconciliation tables `mqtt_ingest.power_energy_*_reconciliation`
@@ -112,6 +113,6 @@ Subscriber users should write through the ingest functions only; direct table ac
 - source repository: `mqtt2postgres`
 - source baseline version: `0.9.2`
 - first fork version: `0.9.2-fork2.0`
-- current standalone version: `0.9.2-fork2.1`
+- current standalone version: `0.9.2-fork2.2`
 
 See [FORKNOTE.md](FORKNOTE.md) and [CHANGELOG.md](CHANGELOG.md) for fork provenance and release history.

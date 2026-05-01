@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION mqtt_ingest.ensure_message_aggregates_table(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = pg_catalog, mqtt_ingest, public
 AS $$
 DECLARE
     qualified_table TEXT := format('mqtt_ingest.%I', table_suffix);
@@ -182,6 +183,7 @@ CREATE OR REPLACE FUNCTION mqtt_ingest.refresh_message_aggregates(
 )
 RETURNS VOID
 LANGUAGE plpgsql
+SET search_path = pg_catalog, mqtt_ingest, public
 AS $$
 DECLARE
     refresh_from TIMESTAMPTZ;
