@@ -7,6 +7,7 @@
 - Added migration functions for staging legacy rows, applying topic mappings, duplicate-safe raw message loading, relay-state event loading, topic inventory upserts, and aggregate refresh.
 - Added scripts for sanitized pg_dumpall restore, dry-run mapping reports, remapping, batch loading, range-based batch execution, reset helpers, and explicit skip-rule seeding.
 - Added XLSX topic-mapping import for `mapping/result_export.xlsx` worksheet `Tabelle2`, including support for historical device aliases and double-prefix legacy Shelly topics.
+- Added topic-mapping workbook templates with required columns and example device mappings for future migrations.
 - Documented the local restore, mapping, dry-run, range-run, duplicate reset, and load workflow in [Legacy MQTT Dump Migration](docs/legacy-mqtt-dump-migration.md).
 - Ignored local `pg_dump/` files so large scratch dumps are not committed.
 

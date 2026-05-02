@@ -134,6 +134,13 @@ DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/tsdb \
 ./scripts/import-topic-mapping-xlsx.sh ./mapping/result_export.xlsx
 ```
 
+Use `mapping/result_export-template.xlsx` or
+`mapping/result_export-template.csv` as the template for future mapping exports.
+The required worksheet is `Tabelle2`; the required columns are
+`<new-mqtt-device-name>` and `<old-mqtt-device-name>`. The optional columns
+`<very-old-mqtt-device-name>` and `<not-in-use>` support legacy aliases and
+rows that should be skipped by default.
+
 The importer creates regex rules like:
 
 ```text
@@ -147,8 +154,8 @@ as `shellies/shellies/<device>/...`.
 It creates source-table-specific rules for `public.mqtt_power`,
 `public.mqtt_energy`, `public.mqtt_status`, the other legacy MQTT tables, and
 `public.mqtt_topics`. It also adds a default `$SYS/` retained-topic inventory
-rule. Rows marked `Not in Use` are skipped by default. Include them explicitly
-with:
+rule. Rows with any non-empty `<not-in-use>` value are skipped by default.
+Include them explicitly with:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/tsdb \

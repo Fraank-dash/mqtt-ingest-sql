@@ -1,0 +1,4 @@
+<new-mqtt-device-name>,<old-mqtt-device-name>,<very-old-mqtt-device-name>,<not-in-use>,notes
+shellyplus1pm-aabbcc,BV.LR.SY.PLG.TV,,,"Normal mapping: shellies/BV.LR.SY.PLG.TV/... -> shellies/shellyplus1pm-aabbcc/..."
+shellyplug-F43A50,BV.SR.SY.PLG.Server,shellies/BV.LR.SY.PLG.Server,,"Includes an intentional legacy double-prefix alias: shellies/shellies/BV.LR.SY.PLG.Server/..."
+shellyplus1pm-unused,BV.XX.SY.PLG.Old,,x,"Skipped by default because <not-in-use> is non-empty."
