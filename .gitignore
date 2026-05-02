@@ -1,2 +1,3 @@
 .tmp/
 pg_dump/
+mapping/result_export.xlsx
