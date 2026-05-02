@@ -113,6 +113,10 @@ This means the raw hypertable is the primary source, and the aggregate tables ar
 
 For `power` and `energy` topics, the raw hypertable is also the source of a separate per-device reconciliation path that compares integrated `power` against cumulative `energy` deltas. For Shelly relay topics, `shellies/<device>/relay/0` payloads of `on` or `off` are also stored in `mqtt_ingest.relay_state_events` so reconciliation rows can report relay on/off coverage for each bucket.
 
+The repository bootstrap keeps only a rolling 12 months of data in `mqtt_ingest.messages`
+and `mqtt_ingest.relay_state_events`. That raw retention does not delete existing rows in
+the aggregate or reconciliation hypertables.
+
 ## Topic Overview Path
 
 The topic-overview subscriber is separate on purpose.
@@ -160,6 +164,10 @@ Derived tables:
 - `mqtt_ingest.power_energy_15m_reconciliation`
 - `mqtt_ingest.power_energy_60m_reconciliation`
 - `mqtt_ingest.power_energy_24h_reconciliation`
+
+Those derived tables are intentionally retained independently of the raw 12-month history.
+Once old raw rows have been pruned, existing derived rows remain queryable, but those older
+periods can no longer be recomputed from raw inputs.
 
 Each aggregate row is grouped by:
 

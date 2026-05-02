@@ -9,6 +9,8 @@ reapply the full bootstrap.
 Use these files when adding the reusable `mqtt_migration` staging and loading
 surface to an already-running database:
 
+Version range: from `0.9.2-fork2.2` to `0.9.2-fork2.3`.
+
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 70_migration_tables.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 71_migration_functions.sql
@@ -17,6 +19,40 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 71_migration_functions.sql
 The helpers do not migrate data by themselves. Restore the legacy dump into a
 scratch database, seed `mqtt_migration.topic_mapping`, then follow
 [Legacy MQTT Dump Migration](legacy-mqtt-dump-migration.md).
+
+## Raw Data Retention
+
+Use this migration when upgrading an already-running database to the rolling
+12-month raw-data retention policy for `mqtt_ingest.messages` and
+`mqtt_ingest.relay_state_events`.
+
+Version range: from `0.9.2-fork2.2` to `0.9.2-fork2.3`.
+
+Run this file:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 58_raw_retention_policies.sql
+```
+
+This adds daily TimescaleDB retention jobs for the two raw hypertables only.
+Existing aggregate and reconciliation rows remain queryable after old raw rows
+are pruned, but periods older than the 12-month raw window can no longer be
+recomputed from source history.
+
+If you want to change the retention window later, edit the hardcoded interval
+values directly in `58_raw_retention_policies.sql`. This repository does not
+parameterize the retention duration yet because the change point is already
+small and explicit.
+
+## Upcoming Version Placeholder
+
+Use this placeholder section for the next release after `0.9.2-fork2.3`.
+
+Version range: from `0.9.2-fork2.3` to `0.9.2-fork2.4` (currently unreleased).
+
+No existing-database migration step is defined yet for the current unreleased
+state. Add the required `psql ... -f NN_*.sql` commands here once new SQL
+bootstrap changes are staged for `0.9.2-fork2.4`.
 
 ## Shelly Relay State Coverage
 

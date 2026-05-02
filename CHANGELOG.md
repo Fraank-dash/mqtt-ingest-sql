@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.9.2-fork2.3 - 2026-05-02
+
+### Topic: Raw Data Retention
+- Added `58_raw_retention_policies.sql` to manage TimescaleDB retention policies for `mqtt_ingest.messages` and `mqtt_ingest.relay_state_events`.
+- Configured a rolling 12-month raw-data retention window with a daily retention-policy schedule.
+- Extended bootstrap verification, local health checks, and setup documentation to assert and document raw-data retention.
+- Documented the retention contract: aggregate and reconciliation history remains queryable after raw rows are pruned, but older periods can no longer be recomputed from raw history.
+- Documented that retention duration changes should be made directly in `58_raw_retention_policies.sql`; there is intentionally no retention-interval parameterization yet.
+
 ### Topic: Legacy MQTT Dump Migration
 - Added reusable `mqtt_migration` staging tables, mapping rules, rejected-row audit storage, and batch summaries for legacy `public.mqtt_*` dump imports.
 - Added migration functions for staging legacy rows, applying topic mappings, duplicate-safe raw message loading, relay-state event loading, topic inventory upserts, and aggregate refresh.

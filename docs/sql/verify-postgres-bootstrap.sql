@@ -14,6 +14,18 @@ ingest_functions AS (
     WHERE n.nspname = 'mqtt_ingest'
       AND p.proname IN ('ingest_message', 'ingest_topics')
 ),
+retention_policies AS (
+    SELECT
+        h.schema_name AS hypertable_schema,
+        h.table_name AS hypertable_name,
+        (j.config ->> 'drop_after')::INTERVAL AS drop_after,
+        j.schedule_interval
+    FROM timescaledb_information.jobs j
+    JOIN _timescaledb_catalog.hypertable h
+      ON h.id = (j.config ->> 'hypertable_id')::INTEGER
+    WHERE j.proc_name = 'policy_retention'
+      AND j.config ? 'hypertable_id'
+),
 checks(name, passed) AS (
     VALUES
         ('table mqtt_ingest.messages exists',
@@ -22,6 +34,24 @@ checks(name, passed) AS (
             to_regclass('mqtt_ingest.topic_overview') IS NOT NULL),
         ('table mqtt_ingest.relay_state_events exists',
             to_regclass('mqtt_ingest.relay_state_events') IS NOT NULL),
+        ('retention policy for mqtt_ingest.messages exists',
+            EXISTS (
+                SELECT 1
+                FROM retention_policies
+                WHERE hypertable_schema = 'mqtt_ingest'
+                  AND hypertable_name = 'messages'
+                  AND drop_after = INTERVAL '12 months'
+                  AND schedule_interval = INTERVAL '1 day'
+            )),
+        ('retention policy for mqtt_ingest.relay_state_events exists',
+            EXISTS (
+                SELECT 1
+                FROM retention_policies
+                WHERE hypertable_schema = 'mqtt_ingest'
+                  AND hypertable_name = 'relay_state_events'
+                  AND drop_after = INTERVAL '12 months'
+                  AND schedule_interval = INTERVAL '1 day'
+            )),
         ('table mqtt_ingest.message_3m_aggregates exists',
             to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL),
         ('table mqtt_ingest.power_energy_3m_reconciliation exists',

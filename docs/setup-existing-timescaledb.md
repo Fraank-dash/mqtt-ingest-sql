@@ -80,10 +80,12 @@ The script applies all root-level `NN_*.sql` files in lexical order. These files
 
 - schema `mqtt_ingest`
 - raw message hypertable
+- raw relay-state event hypertable
 - topic overview table
 - aggregate and reconciliation tables
 - ingest and refresh functions
 - TimescaleDB background jobs
+- 12-month retention policies for raw hypertables
 - least-privilege role `mqtt_ingest_writer`
 
 ## 3. Verify The Bootstrap
@@ -101,7 +103,7 @@ With `psql`, you can run the same file from the repository root with:
 \i docs/sql/verify-postgres-bootstrap.sql
 ```
 
-The verifier checks the core objects, the `mqtt_ingest_writer` role, function grants, lack of direct table privileges for that role, and `SECURITY DEFINER` on the ingest entry points. The SQL file returns failed check names, or an empty result set when verification passes.
+The verifier checks the core objects, the raw-data retention policies, the `mqtt_ingest_writer` role, function grants, lack of direct table privileges for that role, and `SECURITY DEFINER` on the ingest entry points. The SQL file returns failed check names, or an empty result set when verification passes.
 
 ## 4. Create MQTT Subscriber Login Users
 
@@ -188,6 +190,22 @@ WHERE proc_schema = 'mqtt_ingest'
 ORDER BY proc_name;
 ```
 
+Check raw-data retention policies:
+
+```sql
+SELECT
+    h.schema_name AS hypertable_schema,
+    h.table_name AS hypertable_name,
+    (j.config ->> 'drop_after')::INTERVAL AS drop_after,
+    j.schedule_interval
+FROM timescaledb_information.jobs j
+JOIN _timescaledb_catalog.hypertable h
+  ON h.id = (j.config ->> 'hypertable_id')::INTEGER
+WHERE j.proc_name = 'policy_retention'
+  AND j.config ? 'hypertable_id'
+ORDER BY h.table_name;
+```
+
 Check subscriber privileges:
 
 ```sql
@@ -215,3 +233,8 @@ DATABASE_URL=postgres://postgres:change-me@127.0.0.1:5432/mqtt ./scripts/verify-
 ```
 
 The bootstrap is written to be reapplied for normal object updates. Use the admin connection because the security bootstrap manages roles and grants.
+
+Raw-data retention is also managed by the bootstrap. Reapplying the SQL keeps the
+configured 12-month rolling retention for `mqtt_ingest.messages` and
+`mqtt_ingest.relay_state_events`, while leaving aggregate and reconciliation
+history intact.
