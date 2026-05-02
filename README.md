@@ -24,6 +24,7 @@ not as the authoritative production security or infrastructure model.
 
 - ordered bootstrap SQL for `mqtt_ingest`
 - aggregate and reconciliation helper functions
+- reusable legacy `public.mqtt_*` dump migration staging helpers
 - TimescaleDB background job bootstrap
 - SQL-focused query helpers
 - a minimal TimescaleDB-only local compose stack
@@ -89,8 +90,12 @@ This repository owns the bootstrap contract for:
 - reconciliation tables `mqtt_ingest.power_energy_*_reconciliation`
 - background-job bootstrap for aggregate and reconciliation refresh
 - least-privilege ingest role `mqtt_ingest_writer`
+- migration schema `mqtt_migration` for staging historical MQTT dumps
 
 `mqtt2postgres` is expected to remain compatible with these object names and file ordering.
+
+For historical dump imports from legacy `public.mqtt_*` tables, see
+[Legacy MQTT Dump Migration](docs/legacy-mqtt-dump-migration.md).
 
 ## MQTT Subscriber Access
 

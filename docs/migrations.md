@@ -4,6 +4,20 @@ This project primarily uses ordered bootstrap SQL files. For an existing databas
 apply only the files needed for the change unless you intentionally want to
 reapply the full bootstrap.
 
+## Legacy MQTT Dump Migration Helpers
+
+Use these files when adding the reusable `mqtt_migration` staging and loading
+surface to an already-running database:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 70_migration_tables.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f 71_migration_functions.sql
+```
+
+The helpers do not migrate data by themselves. Restore the legacy dump into a
+scratch database, seed `mqtt_migration.topic_mapping`, then follow
+[Legacy MQTT Dump Migration](legacy-mqtt-dump-migration.md).
+
 ## Shelly Relay State Coverage
 
 Use this migration when upgrading an already-running database to the Shelly relay
